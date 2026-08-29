@@ -4,6 +4,7 @@ Seted up the work enviornment with two virtual machines.
 
   ![Flare VM](assets/flare-vm.png)
   ![Renmux VM](assets/renmux-vm.png)
+  ![Renmux tools](assets/renmux-vm-tools.png)
 
 Finished the install and connected them to their own separate network so that there wouldn't be any risks of my home network being affected in case of the deployement of any malicious code. 
 .
