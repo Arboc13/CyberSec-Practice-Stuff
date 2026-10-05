@@ -4,4 +4,4 @@ A sort of day to day vlog/record tracker of cybersecurity things I'll try out ov
 
 # Structure 
   - [Malware-Analysis](https://github.com/Arboc13/CyberSec-Practice-Stuff/tree/main/Malware-Analysis) 
-
+  - [Networking](https://github.com/Arboc13/CyberSec-Practice-Stuff/tree/main/Networking)
