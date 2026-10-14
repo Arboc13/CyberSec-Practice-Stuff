@@ -1,174 +1,145 @@
-#include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <netdb.h>
-#include <arpa/inet.h>
-#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/select.h>
+#include <unistd.h>
+#include <arpa/inet.h>
 
-int
-validate_number (char *str)
-{
-  while (*str)
-    {
-      if (!isdigit (*str))
-	{			//if the character is not a number, return
-	  return 0;
+int main(int argc, char** argv){
+
+
+	struct sockaddr_in server;
+	int fdmax, fd_count, fd_server;
+	char buff[512];
+
+	//create the socket file descriptor
+	fd_server = socket(AF_INET, SOCK_STREAM, 0);
+	if (fd_server < 0){
+	
+		perror("Error creating server \n");
+		return -1;
 	}
-      str++;			//point to next character
-    }
-  return 1;
-}
+	printf("Socket created...\n");
 
-int
-validate_ip (char *ip)
-{				//check whether the IP is valid or not
+	//do server settings 
+	memset(&server, 0, sizeof(server)); 
 
-  if (ip == NULL)
-    return 0;
-  int num, dots = 0;
-  char *ptr;
-  char *aux = malloc (strlen (ip) * sizeof (char) + 1);
-  memcpy (aux, ip, strlen (ip) + 1);
-  ptr = strtok (aux, ".");	//cut the string using dor delimiter
-  if (ptr == NULL)
-    {
-      free (aux);
-      return 0;
-    }
-  while (ptr)
-    {
-      if (!validate_number (ptr))	//check whether the sub string is holding only number or not
-	{
-	  free (aux);
-	  return 0;
+	server.sin_family =  AF_INET;
+	server.sin_port = htons(6767);
+	server.sin_addr.s_addr = INADDR_ANY;
+
+
+	//bind server 
+	if(bind(fd_server, (struct sockaddr *)&server, sizeof(server)) < 0){
+		perror("Error binding socket\n");
+		return -2;
 	}
-      num = atoi (ptr);		//convert substring to number
-      if (num >= 0 && num <= 255)
-	{
-	  ptr = strtok (NULL, ".");	//cut the next part of the string
-	  if (ptr != NULL)
-	    dots++;		//increase the dot count
-	}
-      else
-	{
-	  free (aux);
-	  return 0;
-	}
-    }
-  if (dots != 3)		//if the number of dots are not 3, return false
-    {
-      free (aux);
-      return 0;
-    }
+	printf("Port binded...\n");
 
-  free (aux);
-  return 1;
-}
 
-int main (int argc, char **argv)
-{
-
-  //Validating cli arguments
-/*
-  if (argc < 3)
-    {
-      printf ("Give server and port.\n");
-      return 1;
-    }
-
-  if (!validate_ip (argv[1]))
-    {
-      printf ("Server must be a valid ip address server.\n");
-      return 2;
-    }
-
-  if (!validate_number (argv[2]))
-    {
-      printf ("Port must be integer.\n");
-      return 3;
-    }
-*/
-
-  //Initialising socket
-  struct sockaddr_in server;
-  int socket_fd;
-  printf ("Creating socket.\n");
-
-  if ((socket_fd = socket (AF_INET, SOCK_STREAM, 0)) < 0)
-    {
-      perror ("Socket creation failed.\n");
-      exit (EXIT_FAILURE);
-    }
-
-    memset(&server, 0, sizeof(server));
-    server.sin_port = htons(6767); //port
-    server.sin_family =  AF_INET;
-    server.sin_addr.s_addr = inet_addr("10.92.107.1"); //address
-
-  fd_set read_fds;
-  fd_set master;
-
-  char buf[512];
-  printf ("Connecting to server %s:%s.\n", argv[1], argv[2]);
-  //Checking if the connection was successfull
-  if (connect (socket_fd, (struct sockaddr *) &server, sizeof (server)) < 0)
-    {
-      perror ("Connection error.\n");
-      exit (EXIT_FAILURE);
-    }
-
-  int n = recv (socket_fd, buf, sizeof (buf), 0);
-  if (n > 0){
-  	buf[n] = '\0';
-  }
-  printf ("%s\n", buf);
-
-  FD_ZERO (&read_fds);		// clear the set
-  FD_ZERO (&master);
-  FD_SET (0, &master);
-  FD_SET (socket_fd, &master);
-
-  while (1)
-    {
-      read_fds = master;
-
-      if (select (socket_fd + 1, &read_fds, NULL, NULL, NULL) == -1)
-	{
-	  perror ("Select error.\n");
-	  exit (EXIT_FAILURE);
+	//start listening for clients
+	if (listen(fd_server, 5) < 0){
+		perror("Error listening to server\n");
+		return -3;
 	}
 
+	//initialze the fd_set's 
+	fd_set master;
+	fd_set fds_read;
 
-      int nbytes;
-      if (FD_ISSET (0, &read_fds))
-	{
+	FD_ZERO(&master);
+	FD_ZERO(&fds_read);
 
-	  char buf[512];
+	FD_SET(fd_server, &master);//add the current file descriptor to the master;
 
-	  nbytes = read (0, buf, sizeof (buf) - 1);
-	  int ret = send (socket_fd, buf, nbytes, 0);
-	  if (ret <= 0)
-	    {
-	      perror ("Send error\n");
-	      exit (EXIT_FAILURE);
-	    }
+	fdmax= fd_server; //the biggest file descriptor we have is the server socket fd
+	fd_count= 0; //we have 0 clients
+	
+	printf("Server succsefully started! Listenting:\n");
+
+	for(;;){
+
+		fds_read = master; //update the reading fd_set
+				
+		if(select(fdmax+1, &fds_read,NULL, NULL, NULL) == -1){
+			perror("Select error.\n");
+			return -4;
+		}
+
+		int i;
+
+		for(i = 0; i<= fdmax; i++){
+			if (FD_ISSET (i, &fds_read)){
+				
+				if (i == fd_server){
+					//if we get something on the server, then we have a new client and we accept it 
+					struct sockaddr_in client_addr;
+					int len = sizeof(client_addr);
+					int client = accept(fd_server,(struct sockaddr*)&client_addr,&len);					
+					
+					if(client < 0) 
+					{
+						perror("Accept error\n");
+						return -5;
+					}
+
+					printf("New client connected; %s:%d.\n",
+						       	inet_ntoa(client_addr.sin_addr),
+						       	client_addr.sin_port);
+
+					FD_SET(client, &master); //we add client fd to the master fd_set
+					
+					if (client > fdmax){
+						fdmax= client;
+					}
+
+					fd_count++;
+
+					sprintf(buff, "Weclome to the server client %d !!!\n", client-3);
+					send(client, buff, strlen(buff), 0);
+				}
+
+				else {// if a client sent a message
+					
+					int rcv = recv(i, buff, sizeof(buff)-1, 0);
+					if (rcv == 0){
+						printf("Client %d hanged up.\n", i-3);
+						close (i); // always close a fd when done with them.
+						FD_CLR(i, &master);// take it out of the master
+						fd_count--;//decrease the count
+						continue;
+					}
+					else if(rcv < 0){
+						printf("Receive error for client %d\n", i-3);
+						close(i);
+						FD_CLR(i, &master); 
+						fd_count--;
+						continue;
+					}
+					else{
+						char tempbuf[1024];
+						buff[rcv] = '\0';
+						int snd = sprintf(tempbuf, "Client %d says %s", i-3, buff);
+
+						int j; 
+						for(j=3; j<= fdmax; j++){
+							if(FD_ISSET(j, &master)){
+								if(j != fd_server && j!=i){
+									if(send(j, tempbuf, snd, 0) == -1){
+										printf("Error sending to clinet %d\n", j-3);
+									}
+								}
+
+							}
+						
+						}
+					
+					}
+				
+				}
+			}
+		}
 	}
-      if (FD_ISSET (socket_fd, &read_fds))
-	{
-	  nbytes = recv (socket_fd, buf, sizeof (buf) - 1, 0);
-	  if (nbytes <= 0)
-	    {
-	      printf ("Server has closed connection...\n");
-	      exit (2);
-	    }
-
-	  buf[nbytes] = '\0';
-	  write (1, buf, nbytes);
-	    }
-    }
-  return 0;
 }
